@@ -1,5 +1,7 @@
 # Triathlon Agent
 
+**Running-only prompts:** `prompts/master_prompt.md` and the specialist prompts now plan road, trail and ultra running, with optional supporting strength and recovery. They do not prescribe cycling or swimming. The Python package, schemas, starter inputs and deterministic `plan-week` stubs still retain legacy multisport support; use the agent-driven `prepare-run` / `finalize-run` workflow for running-only planning. Use a runner-specific local profile rather than copying the triathlon example's hours or constraints unchanged.
+
 Local, on-demand endurance coaching workflow that plans one training week at a time for triathlon, road running and trail / ultra races.
 
 It is agent-agnostic: any LLM coding agent that can run shell commands and read and write files (Claude Code, OpenCode, Codex, Cursor, ...) can act as the orchestrator and run the chain of specialist coaching prompts. The coaching logic lives in plain Markdown prompts and JSON schemas, not in a vendor-specific integration. A standard-library-only Python layer does the deterministic work around it: it fetches your Intervals.icu data, measures load and readiness, audits the plan against the coaching doctrine, and pushes structured workouts back to Intervals.icu only after you approve the week.

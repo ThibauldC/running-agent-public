@@ -1,4 +1,6 @@
-# Weekly Workflow Definition
+# Weekly Running Workflow Definition
+
+This workflow plans running plus optional running-specific strength, mobility and recovery. Ignore legacy non-running session constraints and test recommendations. Account for other activities already reported by the athlete as fatigue context only.
 
 ## Mandatory order
 
@@ -39,7 +41,7 @@ After the push, `approve` writes `orphan_events.json` and prints any coach-creat
 - session details
 - nutrition guidance
 - changes versus prior week
-- threshold testing status and proposed threshold updates
+- running threshold testing status and proposed Run sport-setting updates only
 - approval checkpoint
 
 ## Failure handling
@@ -58,4 +60,4 @@ Do not keep reasoning only in chat. Write every agent output and the final plan 
 
 ## Scheduling rule
 
-Optimize the best weekly combination first. Treat weekday preferences as soft unless they are based on access constraints such as club sessions or pool opening hours.
+Optimize the best running week first. Treat weekday preferences as soft unless they are based on genuine running access or life constraints such as running-club sessions, track/trail access, travel or days off. Never add another endurance sport to fill a time budget.

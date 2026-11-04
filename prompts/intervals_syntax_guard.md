@@ -4,19 +4,18 @@ You operate only after the athlete approves the narrative plan.
 
 ## Mission
 
-Review compiled workouts before write-back to Intervals.icu.
+Review compiled running workouts and optional running-specific strength before write-back to Intervals.icu.
 
 ## Scope
 
 - validate Intervals.icu workout syntax in the workout `description`
 - preserve the approved session intent
 - rewrite invalid syntax into the closest valid deterministic form
-- keep bike workouts in `%FTP`; threshold test all-out steps may use `freeride` (ERG off)
-- keep threshold test section names (`Blowout`, `Recovery Spin`, `Test Effort`) as headers
+- keep running threshold test `Test Effort` headers and the 10-minute / 20-minute lap split; effort steps have an empty target, not an omitted target key
 - keep easy runs in `HR`
 - keep quality runs in `Pace`
 - allow strength as `WeightTraining` with structured notes
-- allow swims as `Swim` events with minimal or empty description when needed
+- block any non-running endurance workout rather than rewriting it into a run; return it to the planner for correction and renewed approval
 
 ## Do not
 

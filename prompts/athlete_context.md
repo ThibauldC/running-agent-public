@@ -1,4 +1,4 @@
-# Athlete Context Template
+# Runner Context Template
 
 Maintain three local sources of truth:
 
@@ -8,7 +8,7 @@ Maintain three local sources of truth:
 
 ## Athlete profile should contain
 
-- training background
+- running background, recent weekly distance and frequency, longest recent run, and road or trail experience
 - time constraints
 - hard constraints
 - soft preferences
@@ -25,7 +25,6 @@ Baselines for HRV, resting HR, and sleep should be derived from Intervals wellne
 - last week summary
 - missed sessions
 - unusual fatigue or life stress
-- `open_water_mode` so the system knows whether pool-season swim constraints still apply
 - this week time constraints
 - double-session capacity by day if relevant
 - time caps by day if relevant
@@ -58,8 +57,9 @@ The system must explicitly surface assumptions when any of these are incomplete.
 
 ## Constraint handling
 
-- hard constraints include access constraints such as club sessions, pool opening hours, travel, or real life scheduling blocks
+- hard constraints include running-club sessions, track or trail access, travel, or real life scheduling blocks
 - soft constraints include athlete preferences such as preferred rest day or preferred long-session day
 - optimize the weekly plan around training quality and phase alignment first, then fit soft preferences where possible
-- when `open_water_mode` is `false`, pool-season swim constraints can remain hard
-- when `open_water_mode` is `true`, the planner may relax pool-season-only constraints and place swims more freely
+- plan running with optional running-specific strength, mobility and recovery only
+- ignore inherited swim schedules, pool access, open-water settings and long-ride preferences in legacy inputs; do not ask the runner to fill these fields
+- acknowledge other activities the athlete actually does as fatigue or scheduling context, without prescribing them

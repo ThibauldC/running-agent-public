@@ -11,4 +11,4 @@ Use Friel-style periodization to govern the larger arc.
 - do not use one good week to justify reckless progression, and do not use caution to justify no progression: load weeks inside a block must rise (key-session dose, long-session duration, or CTL ramp ~+3 to +6/week)
 - a block that ends with CTL flat or falling outside taper or illness is a failed block; the next one must load more
 - recovery weeks, tapers, and phase shifts must be visible in the plan and report
-- every recovery week is a "rest & test" week: it ends with one threshold test, alternating bike and run, and both after an A-race (see `threshold_testing_doctrine.md`); skip only for a blocker or when both were tested in the last 28 days, and say why
+- a recovery week may end with one running threshold test only when `threshold_testing.run` says it is due and readiness is green (see `threshold_testing_doctrine.md`); otherwise keep the week easy and explain the deferral. A recent eligible road race can replace the test; never test during post-race transition or return from a break

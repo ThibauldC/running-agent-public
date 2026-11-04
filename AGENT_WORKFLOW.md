@@ -6,6 +6,7 @@ This repository is designed so an LLM coding agent can orchestrate the whole wee
 
 - Run the agent from the repository root.
 - Give it `prompts/master_prompt.md` as its instructions for a planning run, for example by asking it to read and follow that file when you say `plan my next week`.
+- These prompts are running-only (road, trail and ultra), with optional supporting strength and recovery. Legacy non-running fields in snapshots are not training requirements. `plan-week` still uses the original deterministic stubs, not these prompts.
 - `AGENTS.md` holds the repository conventions. Agents that read `AGENTS.md` automatically pick it up; for others, point their own instruction file (such as `CLAUDE.md`) at it.
 - Nothing in the Python layer depends on a specific agent: it only reads and writes the run artifacts listed below.
 
