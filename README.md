@@ -173,6 +173,32 @@ The permanent athlete profile now separates:
 - `phase_preferences`
 - `decision_policy`
 
+### `data/athlete_profile.json` fields
+
+The template is valid JSON, so explanations live here rather than as comments inside the file. Replace example values with your own; fields for sports you do not train can be left out or left blank.
+
+- `name`, `age`, `sex`: basic athlete context. `sex` is context for coaching, not a training prescription.
+- `training_age_years`: years of consistent structured training, not age in years.
+- `primary_sport_background`: sport you have the most experience in.
+- `current_level`: your current ability or experience in your own words.
+- `target_race_distance`: the distance/event type you are preparing for; race dates and priorities belong in the Intervals.icu calendar.
+- `primary_performance_goal`, `secondary_goal`: the main outcome you want and another useful supporting goal. These are background guidance, not a replacement for calendar races.
+- `typical_training_hours_per_week`: usual weekly training availability; this is a reference, not a cap for a particular week.
+- `preferred_long_ride_day`, `preferred_long_run_day`: preferred days for long bike/run sessions, if those sports apply.
+- `non_negotiable_days_off`: weekdays that must stay free of training.
+- `strength_days`: preferred days for strength training.
+- `injury_history`: past or recurring injuries and relevant triggers; include current issues in the weekly check-in too.
+- `known_constraints`: other scheduling, access, equipment, or life constraints, in plain language.
+- `hard_constraints.always`: requirements that apply every week. `hard_constraints.when_open_water_mode_false`: requirements that apply only when the weekly check-in says open-water mode is false (primarily for swim/pool-season planning).
+- `soft_preferences.weekday_rhythm`, `soft_preferences.weekend_structure`: preferred patterns the planner can move if training needs or hard constraints require it.
+- `phase_preferences.early_phase_bias`: priorities you prefer early in a training cycle, where appropriate.
+- `decision_policy.sequencing_priority`: what should take precedence when fitting sessions together (example: physiological sequencing).
+- `decision_policy.routine_override_rule`: when the plan may depart from your usual routine and how that change should be handled.
+- `typical_sleep_hours`: usual sleep duration in hours.
+- `hrv_baseline`, `resting_hr_baseline`: optional manual fallback values; normally derived from Intervals.icu wellness history when enough data is available. Use `null` if unknown.
+- `threshold_testing.bike_protocol`, `threshold_testing.bike_protocol_alternative`, `threshold_testing.run_protocol`: preferred test protocols for setting bike/run training thresholds. Omit sports you do not train; use supported protocol names from the threshold-testing guidance.
+- `coaching_tone_preference`: how you want coaching feedback phrased (for example, direct, encouraging, or detailed).
+
 The coaching philosophy is explicitly organized around:
 
 - `Joe Friel` for periodization and race-phase structure
