@@ -147,16 +147,37 @@ All commands run as `python3 -m triathlon_agent.cli <command> ...`; most take `-
 
 ## Weekly check-in fields
 
-Important `data/weekly_checkin.json` fields:
+The template `data/weekly_checkin.template.json` is valid JSON. Copy it to `data/weekly_checkin.json` and replace values with your own. The examples below are illustrative, not defaults or a suggested training week. Use `null` for unknown or unanswered fields; use `[]` or `{}` when you know there are no items. Do not copy example symptoms, decisions or dates as if they were your own.
 
-- `open_water_mode`: `false` keeps pool-season swim constraints active; `true` lets the planner relax those seasonal swim constraints
-- `available_hours_override_min` / `available_hours_hard_cap_min`: hours you have this week, in minutes; these bind (`finalize-run` rejects a plan above them). The profile's typical hours stay a soft reference
-- `double_session_capacity_by_day`: optional per-day double-session guidance for the coming week
-- `time_caps_by_day`: optional per-day time caps in minutes for the coming week; these do bind
-- `red_flags`, `illness_symptoms`: chest pain, palpitations, disproportionate breathlessness, dizziness or fever stop training and send you to a doctor; above-the-neck symptoms alone allow easy sessions
-- `pain_scores`: 0-10 per body part (≥ 3 is a niggle, ≥ 5 means no impact on that area)
-- `sleep_quality`, `work_stress`, `missed_session_reasons`, `upcoming_events`, `race_debrief`
-- `subjective_readiness`, `current_motivation`: leave `null` when unknown; a blank answer is never read as "fine"
+| Key | What to enter | Example JSON value |
+| --- | --- | --- |
+| `planning_date` | Date the plan is prepared for, in YYYY-MM-DD format. | `"2026-03-08"` |
+| `last_week_summary` | How last week's training went. | `"Ran four times; Sunday's long run felt comfortable."` |
+| `missed_sessions` | Sessions missed or cut short. | `["Thursday intervals"]` |
+| `missed_session_reasons` | Map each missed session to its reason. | `{"Thursday intervals": "Worked late"}` |
+| `unexpected_fatigue` | Unusual tiredness and possible context, or `null` if unknown. | `"Tired after two nights of poor sleep"` |
+| `open_water_mode` | Legacy swimming setting; leave `false` for running-only use. | `false` |
+| `time_constraints` | Schedule restrictions in plain language. | `["Wednesday: at most 45 minutes"]` |
+| `travel_this_week` | Whether you are travelling this week. | `true` |
+| `current_motivation` | Motivation from 1 to 10. | `8` |
+| `subjective_readiness` | How ready you feel to train, from 1 to 10. | `6` |
+| `pain_or_niggles` | Describe location, symptoms and when they occur. | `"Left calf feels tight after running"` |
+| `pain_scores` | Pain from 0 to 10 for each affected body part. | `{"left calf": 2}` |
+| `illness_symptoms` | Symptoms, including location and timing; use `[]` if none. | `["Sore throat since Monday"]` |
+| `red_flags` | Concerning symptoms; use `[]` if none. | `["Dizziness during a run"]` |
+| `sleep_quality` | Sleep quality from 1 (very poor) to 5 (great). | `3` |
+| `work_stress` | Work/life stress from 1 (calm) to 10 (overwhelming). | `7` |
+| `athlete_notes` | Other context or preferences for this week. | `"Sunday is best for my long run"` |
+| `upcoming_events` | Events or constraints in the next 2–4 weeks. Races and priorities still come from Intervals. | `["Work trip next Thursday"]` |
+| `race_debrief` | After a race, describe pacing, fuelling and how you feel now; otherwise use `null`. | `"10k: started too fast; legs recovered after two days"` |
+| `available_hours_override_min` | This week's available training time in minutes; it binds. | `300` |
+| `available_hours_hard_cap_min` | Hard weekly training-time cap in minutes; it binds. | `330` |
+| `double_session_capacity_by_day` | Days when two sessions are or are not feasible. | `{"Tuesday": true, "Wednesday": false}` |
+| `time_caps_by_day` | Hard daily time caps in minutes. | `{"Wednesday": 45}` |
+| `decision_answers` | Answer an open decision using its question or ID. | `{"Enter the Leuven 10k?": "yes"}` |
+| `bike_test_protocol` | Legacy bike setting; leave `null` for running-only use. For cycling, supported values include `"coggan_20"` and `"friel_30"`. | `null` |
+
+Chest pain, palpitations, disproportionate breathlessness, dizziness or fever warrant stopping training and medical assessment. Record symptoms honestly; an empty or unknown answer is not evidence that you are healthy.
 
 Answer the post-fetch check-in with `record-checkin` (see below); its answers are merged into the run and the snapshot is re-normalized before planning.
 
