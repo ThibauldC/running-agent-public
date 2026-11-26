@@ -16,13 +16,12 @@ This workflow plans running plus optional running-specific strength, mobility an
 10. call `phase_alignment_auditor` and write `agent_outputs/phase_alignment_auditor.json`
 11. call `training_philosophy_auditor` and write `agent_outputs/training_philosophy_auditor.json`
 12. call `validator_coach` and write `agent_outputs/validator_coach.json`
-13. revise the plan if needed, then call `nutritionist` and write `agent_outputs/nutritionist.json`
-14. synthesize `final_plan.json` as the main agent
-15. run `python3 -m triathlon_agent.cli finalize-run runs/<run_id>`; if the printed coaching audit shows warnings, either revise the plan and finalize again, or explain each warning to the athlete in the report presentation
-16. present the narrative weekly report for approval
-17. after approval only: compile workouts and meaningful nutrition notes
-18. run `intervals_syntax_guard` on workouts
-19. push workouts plus nutrition notes to Intervals.icu with `python3 -m triathlon_agent.cli approve runs/<run_id> --mode <mock|live>`; the same command pushes approved threshold updates (`threshold_testing.threshold_updates` with `apply: true`) to Intervals sport settings and records the test in `data/athlete_state.json`
+13. revise the plan if needed, then synthesize `final_plan.json` as the main agent; leave required nutrition fields empty and neutral without recommendations
+14. run `python3 -m triathlon_agent.cli finalize-run runs/<run_id>`; if the printed coaching audit shows warnings, either revise the plan and finalize again, or explain each warning to the athlete in the report presentation
+15. present the narrative weekly report for approval
+16. after approval only: compile workouts
+17. run `intervals_syntax_guard` on workouts
+18. push workouts to Intervals.icu with `python3 -m triathlon_agent.cli approve runs/<run_id> --mode <mock|live>`; the same command pushes approved threshold updates (`threshold_testing.threshold_updates` with `apply: true`) to Intervals sport settings and records the test in `data/athlete_state.json`
 
 Approval is bound to the exact `final_plan.json`: after any revision, run `finalize-run` again and get a fresh approval. Events the athlete edited or moved in Intervals since the last push are skipped and listed in `edited_events.json`; show them and only use `--overwrite-edited` when the athlete agrees.
 
@@ -39,7 +38,6 @@ After the push, `approve` writes `orphan_events.json` and prints any coach-creat
 - macro-cycle decision
 - seven-day plan
 - session details
-- nutrition guidance
 - changes versus prior week
 - running threshold testing status and proposed Run sport-setting updates only
 - approval checkpoint

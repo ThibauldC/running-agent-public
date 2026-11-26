@@ -433,39 +433,7 @@ def render_weekly_report(
                 cadence = f" {step['cadence']}" if step.get("cadence") else ""
                 lines.append(f"    - {step.get('duration', '')} {step.get('target', '')}{cadence}")
         lines.append(f"- Execution notes: {'; '.join(session['execution_notes'])}")
-        nutrition = session.get("nutrition", {})
-        if nutrition:
-            lines.append(
-                f"- Nutrition priority: {nutrition.get('priority', nutrition.get('day_priority', 'Normal fueling'))}"
-            )
-            guidance = nutrition.get("guidance", {})
-            if guidance:
-                lines.append(
-                    f"- Fueling: pre={guidance.get('pre', '')} during={guidance.get('during', '')} post={guidance.get('post', '')}"
-                )
         lines.append("")
-    lines.append("## Nutrition Guidance")
-    lines.append(f"- Week strategy: {final_plan['nutrition_summary']['week_strategy']}")
-    lines.append(
-        f"- Hydration: {final_plan['nutrition_summary']['hydration_guidance']}"
-    )
-    lines.append(
-        f"- Recovery: {final_plan['nutrition_summary']['recovery_priorities']}"
-    )
-    if final_plan["nutrition_summary"]["major_concerns"]:
-        lines.append(
-            f"- Concerns: {'; '.join(final_plan['nutrition_summary']['major_concerns'])}"
-        )
-    lines.append("")
-    lines.append("## Nutrition Note Previews")
-    daily_notes = final_plan["nutrition_summary"].get("daily_notes", [])
-    if daily_notes:
-        for note in daily_notes:
-            lines.append(f"- {note['day']} {note['date']}: {note['title']}")
-            lines.append(f"  {note['body']}")
-    else:
-        lines.append("- No separate nutrition notes will be pushed for this week.")
-    lines.append("")
     lines.append("## Weekly Focus Note Previews")
     focus_notes = final_plan.get("weekly_focus_notes", [])
     if focus_notes:
@@ -483,15 +451,8 @@ def render_weekly_report(
         f"- Planned pushes after approval: {final_plan['write_back_preview']['planned_workouts_to_push']}"
     )
     lines.append(
-        f"- Planned nutrition notes after approval: {final_plan['write_back_preview'].get('planned_notes_to_push', 0)}"
-    )
-    lines.append(
         f"- Disciplines: {', '.join(final_plan['write_back_preview']['workout_disciplines'])}"
     )
-    if final_plan["write_back_preview"].get("note_dates"):
-        lines.append(
-            f"- Nutrition note dates: {', '.join(final_plan['write_back_preview']['note_dates'])}"
-        )
     lines.append("")
     lines.append("## Approval Checkpoint")
     lines.append(final_plan["approval_checkpoint"])

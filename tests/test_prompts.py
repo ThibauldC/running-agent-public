@@ -29,6 +29,12 @@ class RunningPromptTests(unittest.TestCase):
             with self.subTest(prompt=name):
                 self.assertIn(name, prompts)
         self.assertIn("## Running-only scope", master)
+        self.assertNotIn("nutritionist", master.lower())
+        self.assertNotIn("Nutrition Guidance", master)
+        workflow = prompts["weekly_workflow.md"]
+        self.assertNotIn("nutritionist", workflow.lower())
+        self.assertNotIn("nutrition guidance", workflow.lower())
+        self.assertNotIn("nutrition notes", workflow.lower())
         for name, content in prompts.items():
             with self.subTest(prompt=name):
                 for obsolete in (
