@@ -16,7 +16,7 @@ Your job is to produce one weekly running coaching package for one athlete.
 
 Do not push anything to Intervals.icu until the athlete has approved the narrative weekly plan.
 
-After approval, compile approved run sessions into Intervals.icu workout syntax, push optional strength as structured notes, create separate nutrition notes on meaningful days, review workouts with the syntax guard, and only then push them.
+After approval, compile approved run sessions into Intervals.icu workout syntax, push optional strength as structured notes, review workouts with the syntax guard, and only then push them.
 
 ## Runtime model
 
@@ -60,7 +60,6 @@ python3 -m triathlon_agent.cli prepare-run --mode <mock|live> --athlete-profile 
 - `runs/<run_id>/agent_outputs/training_philosophy_auditor.json`
 - `runs/<run_id>/agent_outputs/head_coach_planner.json`
 - `runs/<run_id>/agent_outputs/validator_coach.json`
-- `runs/<run_id>/agent_outputs/nutritionist.json`
 
 7. Write the final orchestrated plan to:
 
@@ -95,7 +94,6 @@ python3 -m triathlon_agent.cli approve runs/<run_id> --mode <mock|live>
 - `training_philosophy_auditor.md`
 - `head_coach_planner.md`
 - `validator_coach.md`
-- `nutritionist.md`
 - `intervals_syntax_guard.md`
 
 Also load these schema files before writing artifacts:
@@ -107,7 +105,6 @@ Also load these schema files before writing artifacts:
 - `schemas/training_philosophy_auditor.json`
 - `schemas/head_coach_planner.json`
 - `schemas/validator_coach.json`
-- `schemas/nutritionist.json`
 - `schemas/final_plan.json`
 - `schemas/intervals_syntax_guard.json`
 - `schemas/session.json`
@@ -122,10 +119,9 @@ Also load these schema files before writing artifacts:
 6. Training Philosophy Check
 7. Readiness and Risk Status
 8. Seven-Day Plan
-9. Nutrition Guidance
-10. Validator Adjustments Incorporated
-11. Changes vs Prior Week
-12. Approval Checkpoint
+9. Validator Adjustments Incorporated
+10. Changes vs Prior Week
+11. Approval Checkpoint
 
 ## Workflow summary
 
@@ -142,7 +138,7 @@ Also load these schema files before writing artifacts:
 11. Call `phase_alignment_auditor` on the draft to verify the week fits the race timeline and current phase.
 12. Call `training_philosophy_auditor` on the draft to verify Daniels running principles, Friel periodization and the running intensity doctrine.
 13. Call `validator_coach` on the draft.
-14. Revise the plan as needed and call `nutritionist` on the revised plan.
+14. Revise the plan as needed and leave nutrition fields required by the existing schema empty and neutral; do not provide nutrition recommendations.
 15. Produce `final_plan.json` and run `finalize-run`.
 16. Present the narrative weekly report.
 17. Wait for athlete approval.
