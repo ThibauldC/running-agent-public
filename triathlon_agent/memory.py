@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from statistics import median
 from typing import Any
 
-from .utils import detect_red_flags, has_niggle, niggle_body_parts, parse_date
+from .utils import checkin_pain_text, detect_red_flags, has_niggle, niggle_body_parts, parse_date
 
 
 REPEATED_NIGGLE_MIN_WEEKS = 2
@@ -235,8 +235,8 @@ def build_response_profile(
         for item in history
         if has_niggle(item.get("pain_or_niggles"))
     ]
-    if weekly_checkin and has_niggle(weekly_checkin.get("pain_or_niggles")):
-        niggle_texts.append(str(weekly_checkin.get("pain_or_niggles")))
+    if weekly_checkin and has_niggle(checkin_pain_text(weekly_checkin)):
+        niggle_texts.append(checkin_pain_text(weekly_checkin))
     part_counter: Counter[str] = Counter()
     for text in niggle_texts:
         part_counter.update(niggle_body_parts(text))

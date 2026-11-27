@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 
 from .race_selection import race_bucket, taper_days
-from .utils import NO_NIGGLE_VALUES, has_niggle, parse_date
+from .utils import NO_NIGGLE_VALUES, checkin_pain_text, has_niggle, parse_date
 
 
 # Bike and run tests are planned automatically. Swim (CSS) is tracked for
@@ -452,7 +452,7 @@ def _latest_eftp(activities: list[dict[str, Any]]) -> float | None:
 
 
 def _has_niggle(weekly_checkin: dict[str, Any]) -> bool:
-    return has_niggle(weekly_checkin.get("pain_or_niggles"))
+    return has_niggle(checkin_pain_text(weekly_checkin))
 
 
 def _blockers(
@@ -487,7 +487,7 @@ def _blockers(
             )
     if discipline == "run" and _has_niggle(weekly_checkin):
         reasons.append(
-            f"Current niggle reported ({weekly_checkin.get('pain_or_niggles')}); no all-out run test until it is gone."
+            f"Current niggle reported ({checkin_pain_text(weekly_checkin)}); no all-out run test until it is gone."
         )
     return list(dict.fromkeys(reasons))
 

@@ -10,6 +10,7 @@ from typing import Any
 
 from .race_selection import select_priority_race
 from .utils import (
+    checkin_pain_text,
     detect_red_flags,
     ensure_dir,
     has_niggle,
@@ -31,7 +32,7 @@ RACE_RESULTS_MAX = 50
 INJURY_LOG_MAX = 100
 OPEN_DECISIONS_MAX = 20
 # Pain score (0-10) from which a body part counts as a niggle / injury entry.
-PAIN_NIGGLE_SCORE = 3
+PAIN_NIGGLE_SCORE = 5
 
 DEFAULT_ATHLETE_STATE: dict[str, Any] = {
     "version": 1,
@@ -431,7 +432,7 @@ def _pain_scores(checkin: dict[str, Any]) -> dict[str, float]:
 
 def checkin_niggle_parts(checkin: dict[str, Any]) -> list[str]:
     parts: list[str] = []
-    text = checkin.get("pain_or_niggles")
+    text = checkin_pain_text(checkin)
     if has_niggle(text):
         parts.extend(niggle_body_parts(text) or ["unspecified"])
     for part, score in _pain_scores(checkin).items():
@@ -622,7 +623,7 @@ def log_injuries(
         seen.add(key)
         log.append({"date": day, "body_part": part, "severity": severity, "source": source})
 
-    text = checkin.get("pain_or_niggles")
+    text = checkin_pain_text(checkin)
     if has_niggle(text):
         for part in niggle_body_parts(text) or ["unspecified"]:
             add(planning_text, part, "reported", "checkin")

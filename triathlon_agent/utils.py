@@ -447,6 +447,60 @@ def _complaint_clauses(text: Any) -> list[str]:
     ]
 
 
+# A pain score below this is follow-up only; at or above it the usual restrictions apply.
+PAIN_ACTIVE_MIN_SCORE = 5
+_MILD_WORDS = {"tight", "tightness", "sore", "soreness", "ache", "achy", "stiff", "stiffness"}
+_SIDES = {"left", "right"}
+
+
+def _part_and_side(text: str) -> tuple[str, str] | None:
+    """(body part label, side) when text names exactly one known part and at most one side."""
+    labels = [label for pattern, label in _BODY_PARTS if re.search(pattern, text)]
+    sides = {word for word in re.findall(r"[a-z]+", text) if word in _SIDES}
+    if len(labels) != 1 or len(sides) > 1:
+        return None
+    return labels[0], next(iter(sides), "")
+
+
+def _mild_scores(scores: Any) -> set[tuple[str, str]]:
+    """(part, side) keys whose score is below PAIN_ACTIVE_MIN_SCORE; invalid keys are ignored."""
+    mild: set[tuple[str, str]] = set()
+    for key, value in (scores if isinstance(scores, dict) else {}).items():
+        try:
+            below = float(value) < PAIN_ACTIVE_MIN_SCORE
+        except (TypeError, ValueError):
+            continue
+        key_parts = _part_and_side(str(key).lower())
+        if below and key_parts:
+            mild.add(key_parts)
+    return mild
+
+
+def _is_mild_clause(clause: str, mild: set[tuple[str, str]]) -> bool:
+    """True only when the whole clause is one scored part (and side) plus allowlisted words.
+
+    Anything else (another part, "numb", "and", "running") stays active: fail safe.
+    """
+    key = _part_and_side(clause)
+    if key is None or key not in mild:
+        return False
+    rest = clause
+    for pattern, label in _BODY_PARTS:
+        if label == key[0]:
+            rest = re.sub(pattern, " ", rest)
+    return all(word in _MILD_WORDS | _SIDES for word in re.findall(r"[^\W\d_]+|\d+", rest))
+
+
+def active_pain_text(text: Any, scores: Any) -> str:
+    """The niggle text minus complaints the athlete scored below PAIN_ACTIVE_MIN_SCORE."""
+    mild = _mild_scores(scores)
+    return "; ".join(c for c in _complaint_clauses(text) if not _is_mild_clause(c, mild))
+
+
+def checkin_pain_text(checkin: dict[str, Any]) -> str:
+    return active_pain_text((checkin or {}).get("pain_or_niggles"), (checkin or {}).get("pain_scores"))
+
+
 def has_niggle(text: Any) -> bool:
     """True when the free-text niggle field reports an actual complaint."""
     return bool(_complaint_clauses(text))

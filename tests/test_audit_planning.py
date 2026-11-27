@@ -617,7 +617,7 @@ class PeriodizationTests(unittest.TestCase):
         snapshot["prior_plan_adherence"] = {"status": "available", "adherence_score": 0.4, "summary": "s"}
         snapshot["weekly_checkin"]["missed_session_reasons"] = {"Thursday T": "sick with flu"}
         self.assertNotEqual(macro_coach.run(snapshot, GREEN)["week_classification"], "absorb")
-        snapshot["weekly_checkin"]["pain_scores"] = {"knee": 4}
+        snapshot["weekly_checkin"]["pain_scores"] = {"knee": 5}
         macro, _, draft = plan(snapshot)
         runs = [s for s in draft["sessions"] if s["discipline"] == "Run"]
         self.assertEqual(runs, [])

@@ -118,7 +118,7 @@ RUN_IMPACT_BODY_PARTS = frozenset(
         "groin",
     }
 )
-PAIN_SCORE_SWAP_MIN = 3
+PAIN_SCORE_SWAP_MIN = 5  # below 5/10 is follow-up only
 
 # Missed-session reasons that are not athlete unreliability.
 HEALTH_REASON_RE = re.compile(

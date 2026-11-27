@@ -55,6 +55,7 @@ from .report import render_athlete_brief, render_weekly_report
 from .run_manifest import AGENT_OUTPUT_FILES, agent_output_path, agent_outputs_dir
 from .threshold_testing import detect_test_activities, record_threshold_tests
 from .utils import (
+    PAIN_ACTIVE_MIN_SCORE,
     ensure_dir,
     parse_date,
     read_json,
@@ -291,6 +292,48 @@ def _recent_races(snapshot: dict[str, Any], days: int = 14) -> list[dict[str, An
     ]
 
 
+def _pain_follow_ups(
+    search_root: Path, athlete_profile: dict[str, Any], planning_date: str, current_run: Path
+) -> dict[str, float]:
+    """Mild (0 < score < 5) pain scores from the latest earlier recorded check-in of this athlete.
+
+    Approval and push do not matter, but the answers must really have been recorded (not the
+    missing-check-in override) and the athlete name must match exactly. Scores are only used to
+    ask a question; they are never copied into the new check-in.
+    """
+    name = str((athlete_profile or {}).get("name") or "").strip().lower()
+    if not name:
+        return {}
+    latest: tuple[str, str, dict[str, Any]] | None = None
+    for candidate in search_root.iterdir():
+        if not candidate.is_dir() or candidate == current_run:
+            continue
+        state = _read_json_or_empty(candidate / "planning_state.json")
+        inputs = _read_json_or_empty(candidate / "inputs.json")
+        if not state.get("checkin_recorded_at") or "finalized_without_recorded_checkin" in (
+            state.get("override_flags") or []
+        ):
+            continue
+        profile = inputs.get("local_inputs", {}).get("athlete_profile", {})
+        if str(profile.get("name") or "").strip().lower() != name:
+            continue
+        checkin = _run_checkin(candidate, inputs)
+        when = str(checkin.get("planning_date") or "")
+        if not when or when >= planning_date:
+            continue
+        if latest is None or (when, candidate.name) > latest[:2]:
+            latest = (when, candidate.name, checkin)
+    scores = (latest[2].get("pain_scores") if latest else None) or {}
+    follow_ups: dict[str, float] = {}
+    for part, value in scores.items() if isinstance(scores, dict) else []:
+        try:
+            if 0 < float(value) < PAIN_ACTIVE_MIN_SCORE:
+                follow_ups[str(part)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return follow_ups
+
+
 def _run_context_manifest(
     config: AppConfig,
     run_dir: Path,
@@ -335,6 +378,9 @@ def _run_context_manifest(
             planning_date,
             pending_decisions=snapshot.get("open_decisions") or [],
             recent_races=_recent_races(snapshot),
+            pain_follow_ups=_pain_follow_ups(
+                run_dir.parent, snapshot.get("athlete_profile") or {}, planning_date, run_dir
+            ),
         ),
     }
 

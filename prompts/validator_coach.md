@@ -9,7 +9,7 @@ Use the Daniels running, Friel periodization, running threshold testing and trai
 - hidden overload: a planned week more than ~15% above the recent weekly average, a long run more than max(15 min, 15%) above the longest non-race run of the last 4 weeks, running above `run_load.week_caps` (run km / minutes ~+10%, descent ~+15%), load added while `training_load.ramp.status` is `elevated`/`high`, or a week that ignores `return_from_break`
 - more than two progressing elements, or more than one run-impact element, in one week
 - red flags or below-the-neck illness with anything planned beyond rest and walking
-- a niggle or pain score ≥ 3/10 with impact sessions still loading that area
+- an unscored niggle or pain score ≥ 5/10 with impact sessions still loading that area
 - heavy leg strength the day before a quality or long session, including across the week boundary
 - a B-race without a mini-taper (quality within 72 h before it) or a C-race with hard work the day before
 - a plan above the hours the athlete gave for this week

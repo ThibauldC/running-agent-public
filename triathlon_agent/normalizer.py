@@ -24,6 +24,7 @@ from .training_load import (
     zone_seconds,
 )
 from .utils import (
+    checkin_pain_text,
     calendar_weeks,
     chunk_weekly,
     data_as_of_date,
@@ -1453,7 +1454,7 @@ def _single_prior_plan_adherence(
         "intensity_compliance_counts": dict(compliance_counts),
         "week_load_actual": week_load_actual,
         "readiness_status": final_plan.get("readiness_status"),
-        "pain_or_niggles": context_checkin.get("pain_or_niggles"),
+        "pain_or_niggles": checkin_pain_text(context_checkin) or None,
         "status": "available",
         "source_run": prior_plan_context.get("source_run"),
         "planned_week_start": plan_start.isoformat(),

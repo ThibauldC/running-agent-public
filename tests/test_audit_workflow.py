@@ -632,7 +632,7 @@ class LongTermMemoryTests(IsolatedStateCase):
                 {"session_name": "Tempo", "priority": "key", "status": "missed", "planned_minutes": 60, "actual_minutes": 0},
             ],
         }
-        checkin = {"planning_date": "2026-10-04", "pain_or_niggles": "ITB tight", "pain_scores": {"calf": 4},
+        checkin = {"planning_date": "2026-10-04", "pain_or_niggles": "ITB tight", "pain_scores": {"calf": 5},
                    "missed_session_reasons": {"Tempo": "had a cold"}, "race_debrief": "Went out too fast, faded at 30k."}
         state = record_week_actuals({"weekly_actuals": []}, adherence, checkin)
         week = state["weekly_actuals"][0]
