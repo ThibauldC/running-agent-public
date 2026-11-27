@@ -57,6 +57,7 @@ def build_post_fetch_checkin(
     *,
     pending_decisions: list[dict[str, Any]] | None = None,
     recent_races: list[dict[str, Any]] | None = None,
+    pain_follow_ups: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     questions: list[dict[str, Any]] = [
         {
@@ -80,7 +81,7 @@ def build_post_fetch_checkin(
             "key": "pain_or_niggles",
             "prompt": (
                 "Any pain, niggles or unusual tightness? Give each body part a score from 0 (none) to 10 "
-                "(e.g. ITB 2/10, calf 4/10)."
+                "(e.g. ITB 2/10, calf 4/10). Scores below 5 are followed up next week."
             ),
             "maps_to": ["pain_or_niggles", "pain_scores"],
         },
@@ -132,6 +133,17 @@ def build_post_fetch_checkin(
             "maps_to": ["upcoming_events"],
         },
     ]
+    for part, score in (pain_follow_ups or {}).items():
+        questions.append(
+            {
+                "key": f"pain_follow_up:{part}",
+                "prompt": (
+                    f"Last check-in you rated your {part} {score:g}/10. How does it feel now, "
+                    "from 0 (gone) to 10? Answer in pain_scores; do not assume it is unchanged."
+                ),
+                "maps_to": ["pain_scores"],
+            }
+        )
     for race in recent_races or []:
         questions.append(
             {
@@ -213,5 +225,8 @@ def merge_checkin_answers(
         raise ValueError("Invalid check-in answers: " + " ".join(errors))
     merged = deepcopy(checkin)
     for field, value in payload.items():
-        merged[field] = deepcopy(value)
+        if field == "pain_scores" and isinstance(value, dict) and isinstance(merged.get(field), dict):
+            merged[field].update(deepcopy(value))  # a partial score map keeps earlier entries
+        else:
+            merged[field] = deepcopy(value)
     return merged

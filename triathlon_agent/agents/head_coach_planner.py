@@ -62,7 +62,7 @@ from ..progression import (
 )
 from ..race_selection import calendar_races, race_bucket, race_distance_km
 from ..threshold_testing import PROTOCOLS
-from ..utils import day_name, daterange, has_niggle, niggle_body_parts, parse_date
+from ..utils import checkin_pain_text, day_name, daterange, has_niggle, niggle_body_parts, parse_date
 from .nutritionist import carb_range_g_per_h
 
 
@@ -424,11 +424,11 @@ def niggle_flagged(snapshot: dict[str, Any]) -> bool:
     weekly = snapshot.get("weekly_checkin", {}) or {}
     scores = weekly.get("pain_scores") or {}
     scored = isinstance(scores, dict) and any(
-        _safe_number(value) and _safe_number(value) > 0 for value in scores.values()
+        _safe_number(value) and _safe_number(value) >= PAIN_SCORE_SWAP_MIN for value in scores.values()
     )
     return (
         has_itb_history(snapshot)
-        or has_niggle(weekly.get("pain_or_niggles"))
+        or has_niggle(checkin_pain_text(weekly))
         or scored
         or bool(impact_niggles(snapshot))
     )

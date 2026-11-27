@@ -23,7 +23,7 @@ You monitor a runner's readiness, fatigue, impact tolerance and risk. Optional r
 - `training_load.overreaching`: `non_functional_risk` means red-or-yellow and a recovery week now
 - `training_load.efficiency_trend`: declining running pace at comparable HR or rising decoupling is context for fatigue or illness; separate running evidence from any legacy non-running metrics
 - `activity_note_flags`: pain, illness or red-flag words the athlete wrote on activities in the last 14 days
-- check-in `sleep_quality`, `work_stress`, `pain_scores` (≥ 3/10 on a body part is a niggle, ≥ 5/10 means no impact on that area), `illness_symptoms`, `red_flags`, and `missed_session_reasons`
+- check-in `sleep_quality`, `work_stress`, `pain_scores` (< 5/10 on a body part is follow-up only and does not lower readiness; ≥ 5/10 is a niggle and means no impact on that area; unscored pain text still counts), `illness_symptoms`, `red_flags`, and `missed_session_reasons`
 
 ## Red flags
 

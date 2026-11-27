@@ -154,7 +154,7 @@ Important `data/weekly_checkin.json` fields:
 - `double_session_capacity_by_day`: optional per-day double-session guidance for the coming week
 - `time_caps_by_day`: optional per-day time caps in minutes for the coming week; these do bind
 - `red_flags`, `illness_symptoms`: chest pain, palpitations, disproportionate breathlessness, dizziness or fever stop training and send you to a doctor; above-the-neck symptoms alone allow easy sessions
-- `pain_scores`: 0-10 per body part (≥ 3 is a niggle, ≥ 5 means no impact on that area)
+- `pain_scores`: 0-10 per body part (below 5 is follow-up only and is asked about at the next weekly sync; ≥ 5 means no impact on that area). A score only clears matching check-in text when the text is just that body part plus words like tight or sore; anything else stays active
 - `sleep_quality`, `work_stress`, `missed_session_reasons`, `upcoming_events`, `race_debrief`
 - `subjective_readiness`, `current_motivation`: leave `null` when unknown; a blank answer is never read as "fine"
 
@@ -239,7 +239,7 @@ There is no session library: the head coach designs every session. Deterministic
   - more than two progressing elements, or more than one run-impact element (the progression budget)
   - heavy leg strength before a key session, and hard work across the week boundary
   - quality within 72 h before a B-race, hard work after a race, and over-deep tapers
-  - running or descending with a reported pain score of 3/10 or more
+  - running or descending with a reported pain score of 5/10 or more
 
 All thresholds live in `triathlon_agent/coaching_limits.py`, shared by the audit, the validator and the stub head coach.
 

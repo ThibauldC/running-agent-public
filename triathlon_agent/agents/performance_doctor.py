@@ -6,6 +6,7 @@ from typing import Any
 
 from ..training_load import effective_training_load
 from ..utils import (
+    checkin_pain_text,
     NO_NIGGLE_VALUES,
     RED_FLAG_LABELS,
     detect_red_flags,
@@ -123,7 +124,7 @@ WELLNESS_FIELDS = {
     "injury": "Injury rating",
 }
 WEIGHT_DROP_CONCERN_KG = -1.5
-PAIN_NIGGLE_SCORE = 3
+PAIN_NIGGLE_SCORE = 5
 PAIN_NO_IMPACT_SCORE = 5
 STOP_TRAINING_MESSAGE = (
     "Stop training and see a doctor before resuming: {labels}. "
@@ -597,7 +598,7 @@ def _intensity_allowance(
     gate_status = hrv_gate.get("status", "insufficient_data")
     # Stale HRV is missing data: it can never unlock extra intensity.
     extra_allowed = bool(hrv_gate.get("extra_intensity_allowed")) and gate_status != "stale"
-    niggle = has_niggle(snapshot.get("weekly_checkin", {}).get("pain_or_niggles"))
+    niggle = has_niggle(checkin_pain_text(snapshot.get("weekly_checkin", {})))
     if status == "red":
         maximum = 0
         rationale = "Red readiness: no quality until the cause clears."
@@ -971,7 +972,7 @@ def run(snapshot: dict[str, Any]) -> dict[str, Any]:
             subjective.append(f"{message} ({reading['value']:g} on the {scale} scale).")
             fatigue_markers.append(marker)
 
-    niggle_text = str(weekly.get("pain_or_niggles") or "").strip()
+    niggle_text = checkin_pain_text(weekly).strip()
     injury_history = _injury_history_text(athlete)
     niggle = has_niggle(niggle_text)
     niggle_parts = niggle_body_parts(niggle_text) if niggle else []
