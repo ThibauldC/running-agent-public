@@ -531,6 +531,384 @@ class RunAuditTests(unittest.TestCase):
 
 
 class SharedLimitTests(unittest.TestCase):
+    @staticmethod
+    def _history_snapshot() -> dict:
+        return {
+            "athlete_profile": {"typical_training_hours_per_week": 12},
+            "weekly_checkin": {},
+            "planning_constraints": {},
+            "weekly_windows": [
+                {"week_start": day, "minutes": 400}
+                for day in ("2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28")
+            ],
+            "training_load": {
+                "ramp": {"status": "ok"},
+                "run_load": {
+                    "avg_weekly_run_km_4w": 25,
+                    "avg_weekly_run_min_4w": 150,
+                    "longest_run_min_28d": 90,
+                    "established_baseline": {
+                        "status": "available",
+                        "run_km_median": 50,
+                        "run_minutes_median": 300,
+                    },
+                    "week_caps": {
+                        "max_run_km": 27.5,
+                        "max_run_min": 165,
+                        "max_descent_m": 300,
+                        "max_long_run_min": 105,
+                    },
+                    "acwr": {"status": "ok"},
+                    "flags": [],
+                    "weeks": [
+                        {"week_start": day, "training_run_minutes": 150}
+                        for day in ("2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28")
+                    ],
+                },
+            },
+        }
+
+    def test_established_running_history_allows_52_km_without_short_window_warnings(self) -> None:
+        snapshot = self._history_snapshot()
+        sessions = [
+            {**run_session("Tuesday", 75), "distance_km": 13},
+            {**run_session("Thursday", 75), "distance_km": 13},
+            {**run_session("Saturday", 50), "distance_km": 8},
+            {**run_session("Sunday", 100), "distance_km": 18},
+        ]
+        for session in sessions:
+            session["date"] = "2027-01-05"
+        history_allowed = coaching_limits.historical_run_volume_allowed(
+            snapshot, readiness="green", load_week=True
+        )
+        run_caps = coaching_limits.effective_run_week_caps(
+            snapshot, allow_historical=history_allowed
+        )
+        context = {
+            "week_caps": snapshot["training_load"]["run_load"]["week_caps"],
+            "run_volume_caps": run_caps,
+            "training_load": snapshot["training_load"],
+            "return_from_break": {},
+            "returning": False,
+            "budget_exempt": False,
+            "taper": False,
+            "recovery_week": False,
+            "historical_run_allowed": history_allowed,
+            "notes": [],
+        }
+        specs = [
+            {"kind": "easy_run", "day": session["day"], "duration": session["duration_min"], "min_duration": 30}
+            for session in sessions
+        ] + [
+            {"kind": "endurance_ride", "day": "Monday", "duration": 150, "min_duration": 45},
+            {"kind": "endurance_ride", "day": "Friday", "duration": 150, "min_duration": 45},
+        ]
+        head_coach_planner._apply_run_caps(specs, context)
+        head_coach_planner._apply_growth_guard(specs, context, snapshot)
+        self.assertEqual(sum(spec["duration"] for spec in specs if spec["kind"] == "easy_run"), 300)
+        self.assertEqual(sum(spec["duration"] for spec in specs), 600)
+        found = codes(snapshot, sessions)
+        self.assertNotIn("run_volume_jump", found)
+        self.assertNotIn("run_km_over_cap", found)
+        self.assertNotIn("weekly_volume_jump", found)
+        validated = validator_coach.run(snapshot, {"sessions": sessions}, GREEN, LOAD_MACRO, {})
+        self.assertFalse(any("shared run-volume ceiling" in item for item in validated["weaknesses"]))
+        self.assertFalse(any("total-time baseline" in item for item in validated["weaknesses"]))
+
+        recovery = copy.deepcopy(snapshot)
+        recovery["planning_constraints"]["requested_week_type"] = "recovery"
+        self.assertIn("run_volume_jump", codes(recovery, sessions))
+        recovery_validated = validator_coach.run(
+            recovery, {"sessions": sessions}, GREEN, LOAD_MACRO, {}
+        )
+        self.assertTrue(any("shared run-volume ceiling" in item for item in recovery_validated["weaknesses"]))
+        taper_macro = {**LOAD_MACRO, "macro_phase": "taper"}
+        self.assertIn("run_volume_jump", codes(snapshot, sessions, macro=taper_macro))
+        taper_validated = validator_coach.run(
+            snapshot, {"sessions": sessions}, GREEN, taper_macro, {}
+        )
+        self.assertTrue(any("shared run-volume ceiling" in item for item in taper_validated["weaknesses"]))
+
+        above = [
+            {**run_session("Tuesday", 100), "distance_km": 17, "date": "2027-01-05"},
+            {**run_session("Thursday", 100), "distance_km": 17, "date": "2027-01-05"},
+            {**run_session("Saturday", 80), "distance_km": 12, "date": "2027-01-05"},
+            {**run_session("Sunday", 120), "distance_km": 20, "date": "2027-01-05"},
+        ]
+        self.assertIn("run_volume_jump", codes(snapshot, above))
+        above_validated = validator_coach.run(
+            snapshot, {"sessions": above}, GREEN, LOAD_MACRO, {}
+        )
+        self.assertTrue(any("shared run-volume ceiling" in item for item in above_validated["weaknesses"]))
+        small_km_over = [{
+            **run_session("Tuesday", 300), "distance_km": 55.5, "date": "2027-01-05"
+        }]
+        self.assertIn("run_km_over_cap", codes(snapshot, small_km_over))
+        small_km_validated = validator_coach.run(
+            snapshot, {"sessions": small_km_over}, GREEN, LOAD_MACRO, {}
+        )
+        self.assertTrue(any("shared run-volume ceiling" in item for item in small_km_validated["weaknesses"]))
+        small_minute_over = [{
+            **run_session("Tuesday", 332), "distance_km": 55, "date": "2027-01-05"
+        }]
+        self.assertIn("run_volume_jump", codes(snapshot, small_minute_over))
+        small_minute_validated = validator_coach.run(
+            snapshot, {"sessions": small_minute_over}, GREEN, LOAD_MACRO, {}
+        )
+        self.assertTrue(any("shared run-volume ceiling" in item for item in small_minute_validated["weaknesses"]))
+        longer = copy.deepcopy(sessions)
+        next(session for session in longer if session["day"] == "Sunday")["duration_min"] = 110
+        self.assertIn("long_run_jump", codes(snapshot, longer))
+        steeper = copy.deepcopy(sessions)
+        for session in steeper:
+            session["elevation_loss_m"] = 100
+        self.assertIn("descent_over_cap", codes(snapshot, steeper))
+
+    def test_history_growth_allowance_applies_only_to_planned_running(self) -> None:
+        snapshot = self._history_snapshot()
+        rides = [
+            {
+                "day": day,
+                "date": "2027-01-05",
+                "discipline": "Ride",
+                "session_name": f"{day} Ride",
+                "duration_min": 100,
+            }
+            for day in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+        ]
+        self.assertIn("weekly_volume_jump", codes(snapshot, rides))
+        validated = validator_coach.run(snapshot, {"sessions": rides}, GREEN, LOAD_MACRO, {})
+        self.assertTrue(any("total-time baseline" in item for item in validated["weaknesses"]))
+        limit = coaching_limits.weekly_total_growth_limit(
+            snapshot, allow_historical=True, planned_run_minutes=0
+        )
+        self.assertAlmostEqual(limit, 460)
+
+    def test_total_growth_uses_the_running_from_loaded_total_baseline_weeks(self) -> None:
+        snapshot = self._history_snapshot()
+        minutes = (300, 300, 150, 120)
+        days = ("2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28")
+        snapshot["weekly_windows"] = [
+            {"week_start": day, "minutes": value}
+            for day, value in zip(days, minutes)
+        ]
+        snapshot["training_load"]["run_load"]["weeks"] = [
+            {"week_start": day, "training_run_minutes": value}
+            for day, value in zip(days, minutes)
+        ]
+        sessions = [
+            {**run_session(day, 100), "date": "2027-01-05"}
+            for day in ("Tuesday", "Thursday", "Sunday")
+        ] + [{"day": "Monday", "date": "2027-01-05", "discipline": "Ride", "duration_min": 50}]
+
+        limit = coaching_limits.weekly_total_growth_limit(
+            snapshot, allow_historical=True, planned_run_minutes=300
+        )
+
+        self.assertEqual(coaching_limits.baseline_week_minutes(snapshot), 300)
+        self.assertEqual(coaching_limits.baseline_week_run_minutes(snapshot), 300)
+        self.assertEqual(limit, 345)
+        self.assertIn("weekly_volume_jump", codes(snapshot, sessions))
+        validated = validator_coach.run(snapshot, {"sessions": sessions}, GREEN, LOAD_MACRO, {})
+        self.assertTrue(any("total-time baseline" in item for item in validated["weaknesses"]))
+
+    def test_planner_builds_easy_volume_from_eligible_run_history(self) -> None:
+        snapshot = season_snapshot("2027-01-04", races=())
+        snapshot["athlete_profile"]["injury_history"] = []
+        snapshot["athlete_profile"]["weekly_sport_frequency"] = {
+            "run_sessions": 5, "bike_sessions": 2, "strength_sessions": 1
+        }
+        days = ("2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28")
+        run_minutes = (300, 300, 150, 120)
+        snapshot["weekly_windows"] = [
+            {"week_start": day, "minutes": 680, "partial": False} for day in days
+        ]
+        snapshot["training_load"]["run_load"].update(
+            longest_run_min_28d=90,
+            avg_weekly_run_min_4w=217.5,
+            avg_weekly_run_km_4w=36.25,
+            established_baseline={
+                "status": "available", "run_km_median": 50, "run_minutes_median": 312
+            },
+            week_caps={
+                "max_run_km": 39.9, "max_run_min": 239, "max_descent_m": 300,
+                "max_long_run_min": 105,
+            },
+            acwr={"status": "ok"},
+            flags=[],
+            weeks=[
+                {"week_start": day, "training_run_minutes": value}
+                for day, value in zip(days, run_minutes)
+            ],
+        )
+        snapshot["training_load"].update(
+            ramp={"status": "ok"}, overreaching={"status": "ok"},
+            underload={"status": "not_detected"},
+        )
+        snapshot["weekly_checkin"].update(
+            pain_scores={}, pain_or_niggles="none", available_hours_override_min=720,
+            available_hours_hard_cap_min=720,
+        )
+        snapshot["planning_constraints"].update(
+            days_off=["Monday"], fixed_swim_days=[],
+            preferred_run_days=["Tuesday", "Wednesday", "Thursday", "Friday"],
+            time_caps_by_day={}, available_hours_override_min=720,
+            available_hours_hard_cap_min=720,
+            double_session_capacity_by_day={
+                day: True for day in ("Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            },
+        )
+        macro = {**LOAD_MACRO}
+        race = {"priority_race": None, "race_specific_needs": []}
+
+        draft = head_coach_planner.run(snapshot, GREEN, macro, race)
+
+        run_minutes = sum(
+            session["duration_min"] for session in draft["sessions"]
+            if session["discipline"] == "Run" and not session.get("race_day")
+        )
+        run_km = run_minutes / head_coach_planner.run_pace_min_per_km(snapshot["training_load"])
+        self.assertGreaterEqual(run_minutes, 310)
+        self.assertLessEqual(run_minutes, 315)
+        self.assertGreater(run_km, 50)
+        self.assertLess(run_km, 55)
+        self.assertFalse(draft["progression_budget"]["exempt"])
+        self.assertIn(
+            "long run duration (established easy volume prioritized)",
+            draft["progression_budget"]["held"],
+        )
+        long_run = next(
+            session for session in draft["sessions"] if session["session_name"].startswith("Long Aerobic Run")
+        )
+        self.assertEqual(long_run["duration_min"], 90)
+        self.assertLessEqual(draft["weekly_time_budget"]["planned_min"], 720)
+        self.assertTrue(any("Added " in note and "easy running" in note for note in draft["planner_notes"]))
+        found = codes(snapshot, draft["sessions"])
+        self.assertNotIn("run_volume_jump", found)
+        self.assertNotIn("run_km_over_cap", found)
+        self.assertNotIn("weekly_volume_jump", found)
+
+    def test_growth_guard_recalculates_history_allowance_after_trimming_a_run(self) -> None:
+        snapshot = self._history_snapshot()
+        context = {
+            "budget_exempt": False,
+            "taper": False,
+            "recovery_week": False,
+            "historical_run_allowed": True,
+            "notes": [],
+        }
+        specs = [
+            {"kind": "easy_run", "day": "Monday", "duration": 180, "min_duration": 30},
+            {"kind": "long_run", "day": "Sunday", "duration": 150, "min_duration": 150},
+            {"kind": "endurance_ride", "day": "Tuesday", "duration": 160, "min_duration": 45},
+            {"kind": "endurance_ride", "day": "Friday", "duration": 160, "min_duration": 45},
+        ]
+
+        head_coach_planner._apply_growth_guard(specs, context, snapshot)
+
+        sessions = [
+            {**run_session(spec["day"], spec["duration"]), "date": "2027-01-05"}
+            if spec["kind"] in {"easy_run", "long_run"}
+            else {
+                "day": spec["day"],
+                "date": "2027-01-05",
+                "discipline": "Ride",
+                "session_name": f"{spec['day']} Ride",
+                "duration_min": spec["duration"],
+            }
+            for spec in specs
+        ]
+        total = head_coach_planner._planned_training_minutes(specs)
+        limit = coaching_limits.weekly_total_growth_limit(
+            snapshot,
+            allow_historical=True,
+            planned_run_minutes=head_coach_planner._run_minutes(specs),
+        )
+        self.assertLess(specs[0]["duration"], 180)
+        self.assertLessEqual(total, limit)
+        self.assertNotIn("weekly_volume_jump", codes(snapshot, sessions))
+
+    def test_run_history_never_relaxes_caps_when_restricted(self) -> None:
+        snapshot = self._history_snapshot()
+        self.assertEqual(
+            coaching_limits.effective_run_week_caps(snapshot, allow_historical=True)["max_run_km"],
+            55.0,
+        )
+        blockers = [
+            {"training_load": {"return_from_break": {"status": "returning"}}},
+            {"weekly_checkin": {"pain_scores": {"knee": 6}}},
+            {"training_load": {"ramp": {"status": "high"}}},
+            {"training_load": {"overreaching": {"status": "functional"}}},
+            {"training_load": {"run_load": {"flags": ["run_km_jump"]}}},
+        ]
+        for blocker in blockers:
+            restricted = copy.deepcopy(snapshot)
+            for key, value in blocker.items():
+                if key == "training_load" and "run_load" in value:
+                    restricted[key]["run_load"].update(value["run_load"])
+                    restricted[key].update({k: v for k, v in value.items() if k != "run_load"})
+                elif isinstance(value, dict) and isinstance(restricted.get(key), dict):
+                    restricted[key].update(value)
+                else:
+                    restricted[key] = value
+            allow = coaching_limits.historical_run_volume_allowed(
+                restricted, readiness="green", load_week=True
+            )
+            self.assertFalse(allow)
+            self.assertEqual(
+                coaching_limits.effective_run_week_caps(restricted, allow_historical=allow)["max_run_km"],
+                27.5,
+            )
+        self.assertFalse(
+            coaching_limits.historical_run_volume_allowed(snapshot, readiness="green", load_week=False)
+        )
+
+        high_prior = self._history_snapshot()
+        high_prior["training_load"]["run_load"]["week_caps"].update(
+            max_run_km=55, max_run_min=330
+        )
+        high_prior["weekly_checkin"]["pain_scores"] = {"knee": 5}
+        recent_caps = coaching_limits.effective_run_week_caps(high_prior)
+        self.assertEqual(recent_caps["max_run_km"], 55)
+        self.assertEqual(recent_caps["max_run_min"], 330)
+        plan = [{**run_session("Sunday", 350), "date": "2027-01-10", "distance_km": 50}]
+        self.assertIn("run_volume_jump", codes(high_prior, plan))
+
+    def test_higher_last_week_cap_is_not_lowered_by_four_week_average(self) -> None:
+        snapshot = self._history_snapshot()
+        run_load = snapshot["training_load"]["run_load"]
+        run_load["avg_weekly_run_min_4w"] = 150
+        run_load["weeks"] = [
+            {"week_start": day, "training_run_minutes": minutes}
+            for day, minutes in zip(
+                ("2026-12-07", "2026-12-14", "2026-12-21", "2026-12-28"),
+                (50, 50, 100, 400),
+            )
+        ]
+        run_load["week_caps"]["max_run_min"] = 440
+
+        self.assertTrue(
+            coaching_limits.historical_run_volume_allowed(
+                snapshot, readiness="green", load_week=True
+            )
+        )
+        eligible_caps = coaching_limits.effective_run_week_caps(
+            snapshot, allow_historical=True
+        )
+        self.assertEqual(eligible_caps["max_run_min"], 440)
+        self.assertFalse(eligible_caps["historical_minutes_used"])
+
+        restricted = copy.deepcopy(snapshot)
+        restricted["weekly_checkin"]["pain_scores"] = {"knee": 5}
+        self.assertFalse(
+            coaching_limits.historical_run_volume_allowed(
+                restricted, readiness="green", load_week=True
+            )
+        )
+        ineligible_caps = coaching_limits.effective_run_week_caps(restricted)
+        self.assertEqual(ineligible_caps["max_run_min"], 440)
+        self.assertFalse(ineligible_caps["historical_minutes_used"])
+
     def test_audit_and_validator_agree_on_growth(self) -> None:
         snapshot = {"weekly_windows": [{"week_start": f"w{i}", "minutes": 400} for i in range(4)],
                     "planning_constraints": {}}

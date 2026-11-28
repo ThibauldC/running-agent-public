@@ -331,6 +331,65 @@ class DailySignalTests(unittest.TestCase):
 
 
 class RunLoadTests(unittest.TestCase):
+    def test_established_run_baseline_uses_covered_non_race_history(self) -> None:
+        planning_date = date(2026, 10, 19)
+        week_start = date(2026, 10, 26)
+        activities = []
+        for offset in range(11, 1, -1):
+            start = week_start - timedelta(weeks=offset)
+            if offset == 6:  # Covered rest week counts as zero.
+                continue
+            km = 50 if offset > 3 else (25 if offset == 3 else 20)
+            if offset == 9:  # One old outlier cannot pull the median up.
+                km = 100
+            activities.append(
+                {
+                    "id": f"history-{offset}",
+                    "start_date_local": f"{start.isoformat()}T08:00:00",
+                    "type": "Run",
+                    "moving_time": km * 6 * 60,
+                    "distance": km * 1000,
+                }
+            )
+        partial_start = week_start - timedelta(days=7)
+        activities.append(
+            {
+                "id": "partial-week-outlier",
+                "start_date_local": f"{(partial_start + timedelta(days=1)).isoformat()}T08:00:00",
+                "type": "Run",
+                "moving_time": 600 * 60,
+                "distance": 100_000,
+            }
+        )
+        result = assess_run_load(activities, planning_date, week_start=week_start)
+        baseline = result["established_baseline"]
+        self.assertEqual(baseline["status"], "available")
+        self.assertEqual(baseline["baseline_weeks"], 8)
+        self.assertEqual(baseline["run_km_median"], 50)
+        self.assertEqual(baseline["recent_two_week_avg_run_km"], 22.5)
+        self.assertIn("Median of 8 earlier covered non-race weeks", baseline["rationale"])
+        self.assertAlmostEqual(result["week_caps"]["max_run_km"], 39.9)
+
+    def test_sparse_history_cannot_establish_run_baseline(self) -> None:
+        planning_date = date(2026, 10, 19)
+        week_start = date(2026, 10, 26)
+        activities = []
+        for offset in range(6, 1, -1):
+            start = week_start - timedelta(weeks=offset)
+            km = 25 if offset == 3 else 20
+            activities.append(
+                {
+                    "id": f"sparse-{offset}",
+                    "start_date_local": f"{start.isoformat()}T08:00:00",
+                    "type": "Run",
+                    "moving_time": km * 6 * 60,
+                    "distance": km * 1000,
+                }
+            )
+        baseline = assess_run_load(activities, planning_date, week_start=week_start)["established_baseline"]
+        self.assertEqual(baseline["status"], "insufficient_data")
+        self.assertEqual(baseline["baseline_weeks"], 3)
+
     def test_run_acwr_and_week_caps(self) -> None:
         activities = [_act(offset, minutes=50, km=9, total_elevation_loss=100) for offset in range(8, 40, 2)]
         activities += [_act(offset, minutes=90, km=16, total_elevation_loss=400) for offset in (1, 3, 5)]

@@ -34,6 +34,12 @@ import re
 from statistics import mean, median, pstdev
 from typing import Any, Callable
 
+from .coaching_limits import (
+    RUN_HISTORY_MIN_BASELINE_WEEKS,
+    RUN_HISTORY_MIN_RECENT_SHARE,
+    RUN_HISTORY_RECENT_WEEKS,
+    RUN_HISTORY_WEEKS,
+)
 from .race_selection import (
     distance_bucket,
     last_completed_a_race,
@@ -1332,7 +1338,7 @@ def assess_run_load(
     planning_date: date,
     *,
     week_start: date | None = None,
-    weeks: int = 8,
+    weeks: int = RUN_HISTORY_WEEKS,
     race_dates: set[str] | None = None,
     return_from_break: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1357,6 +1363,10 @@ def assess_run_load(
                 "runs": len(runs),
                 "run_km": round(sum((_num(item.get("distance")) or 0.0) for item in runs) / 1000.0, 1),
                 "run_minutes": round(sum(_minutes(item) for item in runs)),
+                "training_run_km": round(
+                    sum((_num(item.get("distance")) or 0.0) for item in training_runs) / 1000.0, 1
+                ),
+                "training_run_minutes": round(sum(_minutes(item) for item in training_runs)),
                 "elevation_gain_m": round(sum((_num(item.get("total_elevation_gain")) or 0.0) for item in runs)),
                 "elevation_loss_m": round(sum(loss for loss, _ in losses)),
                 "elevation_loss_estimated": any(estimated for _, estimated in losses),
@@ -1371,6 +1381,57 @@ def assess_run_load(
     last = completed[-1] if completed else None
     prior = completed[-5:-1]
     recent4 = completed[-4:]
+    data_start = _data_start(activities)
+    covered = [
+        row for row in completed
+        if data_start is not None and date.fromisoformat(row["week_start"]) >= data_start
+    ]
+    recent_history = covered[-RUN_HISTORY_RECENT_WEEKS:]
+    baseline_weeks = covered[:-RUN_HISTORY_RECENT_WEEKS]
+    baseline_km = median(row["training_run_km"] for row in baseline_weeks) if baseline_weeks else None
+    baseline_min = median(row["training_run_minutes"] for row in baseline_weeks) if baseline_weeks else None
+    recent_km = mean(row["training_run_km"] for row in recent_history) if recent_history else None
+    history_reason = ""
+    if len(baseline_weeks) < RUN_HISTORY_MIN_BASELINE_WEEKS:
+        history_reason = (
+            f"Only {len(baseline_weeks)} earlier covered weeks; at least "
+            f"{RUN_HISTORY_MIN_BASELINE_WEEKS} are needed."
+        )
+    elif len(recent_history) < RUN_HISTORY_RECENT_WEEKS:
+        history_reason = "The two most recent completed covered weeks are not both available."
+    elif not all(row["training_run_km"] > 0 for row in recent_history):
+        history_reason = "Both most recent completed weeks need non-race running."
+    elif not baseline_km or recent_km is None or recent_km < baseline_km * RUN_HISTORY_MIN_RECENT_SHARE:
+        history_reason = (
+            f"Recent two-week average ({recent_km or 0:.1f} km) is below "
+            f"{RUN_HISTORY_MIN_RECENT_SHARE:.0%} of the established baseline."
+        )
+    else:
+        history_reason = (
+            f"Median of {len(baseline_weeks)} earlier covered non-race weeks; both recent weeks have "
+            f"running and their {recent_km:.1f} km/week average is "
+            f"{recent_km / baseline_km:.0%} of the baseline."
+        )
+    history_available = (
+        len(baseline_weeks) >= RUN_HISTORY_MIN_BASELINE_WEEKS
+        and len(recent_history) == RUN_HISTORY_RECENT_WEEKS
+        and all(row["training_run_km"] > 0 for row in recent_history)
+        and baseline_km is not None
+        and baseline_km > 0
+        and recent_km is not None
+        and recent_km >= baseline_km * RUN_HISTORY_MIN_RECENT_SHARE
+    )
+    established_baseline = {
+        "status": "available" if history_available else "insufficient_data",
+        "window_weeks": weeks,
+        "baseline_weeks": len(baseline_weeks),
+        "baseline_week_starts": [row["week_start"] for row in baseline_weeks],
+        "recent_week_starts": [row["week_start"] for row in recent_history],
+        "run_km_median": round(baseline_km, 1) if baseline_km is not None else None,
+        "run_minutes_median": round(baseline_min) if baseline_min is not None else None,
+        "recent_two_week_avg_run_km": round(recent_km, 1) if recent_km is not None else None,
+        "rationale": history_reason,
+    }
 
     def avg(rows: list[dict[str, Any]], key: str) -> float:
         return round(mean(row[key] for row in rows), 1) if rows else 0.0
@@ -1438,6 +1499,7 @@ def assess_run_load(
         "longest_run_min_56d": longest_56,
         "longest_race_min_28d": longest(27, 0, races=True),
         "longest_run_excludes": "race-day activities",
+        "established_baseline": established_baseline,
         "avg_weekly_run_km_4w": avg(recent4, "run_km"),
         "avg_weekly_run_min_4w": avg(recent4, "run_minutes"),
         "avg_weekly_elevation_gain_m_4w": avg(recent4, "elevation_gain_m"),

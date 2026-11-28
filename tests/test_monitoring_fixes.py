@@ -163,7 +163,7 @@ class RampAndRunLoadTests(unittest.TestCase):
             )
             activities.append(_run(monday + timedelta(days=2), km=10, minutes=55, loss=50))
         run_load = assess_run_load(activities, PLANNING_DAY, week_start=WEEK_START)
-        self.assertEqual(len(run_load["weeks"]), 8)
+        self.assertEqual(len(run_load["weeks"]), 12)
         self.assertIn("run_km_jump", run_load["flags"])
         self.assertIn("descent_jump", run_load["flags"])
         self.assertEqual(run_load["weeks"][-1]["longest_run_km"], 20.0)
