@@ -6,7 +6,7 @@ Use the Daniels running, Friel periodization, running threshold testing and trai
 
 ## Review for
 
-- hidden overload: a planned week more than ~15% above the recent weekly average, a long run more than max(15 min, 15%) above the longest non-race run of the last 4 weeks, running above `run_load.week_caps` (run km / minutes ~+10%, descent ~+15%), load added while `training_load.ramp.status` is `elevated`/`high`, or a week that ignores `return_from_break`
+- hidden overload: a planned week above its applicable total-time ceiling (recent +15%, with only the extra run allowance from eligible history), a long run more than max(15 min, 15%) above the longest non-race run of the last 4 weeks, running above the effective run-volume cap (recent limits or an eligible established baseline, about +10%; descent remains ~+15%), load added while `training_load.ramp.status` is `elevated`/`high`, or a week that ignores `return_from_break`
 - more than two progressing elements, or more than one run-impact element, in one week
 - red flags or below-the-neck illness with anything planned beyond rest and walking
 - an unscored niggle or pain score ≥ 5/10 with impact sessions still loading that area
@@ -42,7 +42,7 @@ Use the Daniels running, Friel periodization, running threshold testing and trai
 5. final verdict: `keep`, `revise lightly`, `revise` (material changes needed), or `unsafe`
 6. `info`: neutral observations such as planned hours versus the athlete's reference
 
-A weekly total slightly above the athlete's typical hours is not a weakness by itself. More than ~15% above the reference is a weakness unless the plan explains why, whatever the readiness, because hours compete with sleep (~7 h) and a 9-5 job. Exceeding hours the athlete gave for this week is always a weakness.
+A weekly total slightly above the athlete's typical hours is not a weakness by itself. More than ~15% above the reference is a weakness unless the plan explains why, whatever the readiness, because hours compete with sleep (~7 h) and a 9-5 job. An established run baseline may raise the total-time growth ceiling only by the extra running allowance it supports; it never overrides the athlete's available hours, daily caps, phase, pain, overload, re-entry, long-run or descent limits. Exceeding hours the athlete gave for this week is always a weakness.
 
 A deliberate back-to-back trail weekend (medium-long run then long run) is not automatically "stacked key sessions" when recent running supports it, both are easy, readiness is green and it is not a recovery or taper week. Keep the week's running quality to at most one session and count any substantial race-effort block toward that limit.
 

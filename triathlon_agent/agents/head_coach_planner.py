@@ -11,8 +11,8 @@ of a session library:
 - the distribution is pyramidal by default; VO2max/I work joins from build onward
 - one thing progresses at a time (progression budget, `coaching_limits.py`)
 - weekly volume is a coaching decision, but explicit day caps and the check-in's
-  available-hours caps bind; run load respects `run_load.week_caps` and the
-  return-from-break ramp
+  available-hours caps bind; run load respects the effective recent / established
+  run-volume caps and the return-from-break ramp
 - races come only from the Intervals calendar; B races get a mini-taper
 """
 
@@ -35,7 +35,6 @@ from ..coaching_limits import (
     LONG_STEP_MAX,
     LONG_STEP_MIN,
     MAX_WEEKLY_ELEVATION_GROWTH_PCT,
-    MAX_WEEKLY_RUN_GROWTH_PCT,
     MAX_WEEKLY_TOTAL_GROWTH_PCT,
     PAIN_SCORE_SWAP_MIN,
     PROGRESSION_BUDGET_MAX,
@@ -43,10 +42,13 @@ from ..coaching_limits import (
     RUN_IMPACT_BODY_PARTS,
     TAPER_VOLUME_BY_WEEKS_OUT,
     baseline_week_minutes,
+    effective_run_week_caps,
+    historical_run_volume_allowed,
     is_health_reason,
     is_long_session,
     post_race_easy_days,
     pre_race_light_days,
+    weekly_total_growth_limit,
 )
 from ..progression import (
     FOCUS_BY_DISTANCE,
@@ -824,6 +826,19 @@ def _week_context(
     flagged = niggle_flagged(snapshot)
     budget_exempt = underload_status == "detected" and readiness == "green" and not flagged
     weekly = snapshot.get("weekly_checkin", {}) or {}
+    load_week = not (recovery_week or holiday or taper or transition or classification == "absorb")
+    historical_run_allowed = historical_run_volume_allowed(
+        snapshot, readiness=readiness, load_week=load_week
+    )
+    run_volume_caps = effective_run_week_caps(
+        snapshot, allow_historical=historical_run_allowed
+    )
+    if run_volume_caps["historical_used"]:
+        historical = (training_load.get("run_load") or {}).get("established_baseline") or {}
+        notes.append(
+            f"Established running baseline: {historical.get('run_km_median')} km/week; "
+            "this supports a ceiling, not a target, and any added volume stays easy."
+        )
     camp_text = " ".join(
         str(item)
         for item in [
@@ -871,6 +886,8 @@ def _week_context(
         "returning": returning,
         "return_from_break": return_from_break,
         "week_caps": (training_load.get("run_load") or {}).get("week_caps") or {},
+        "run_volume_caps": run_volume_caps,
+        "historical_run_allowed": historical_run_allowed,
         "hard_cap_min": _week_hard_cap(snapshot, return_from_break if returning else {}),
         "ftp_scale": ftp_target_scale(snapshot),
         "pending_ftp_update": pending_ftp_update(snapshot),
@@ -1641,6 +1658,7 @@ def _build_specs(
     )
     _swap_impact_sessions(specs, context, constraints)
     _apply_run_caps(specs, context)
+    _add_established_easy_volume(specs, context)
     _apply_growth_guard(specs, context, snapshot)
     _fit_day_caps(specs, constraints)
     _apply_hard_cap(specs, context)
@@ -1817,21 +1835,28 @@ def run_pace_min_per_km(training_load: dict[str, Any]) -> float:
 
 
 def _run_minute_cap(context: dict[str, Any]) -> tuple[float | None, str]:
-    """Binding weekly run minutes: week caps, re-entry caps, or recent +10%."""
+    """Binding weekly run minutes: recent / established history or re-entry caps."""
     caps: list[tuple[float, str]] = []
     week_caps = context["week_caps"]
+    volume_caps = context.get("run_volume_caps") or week_caps
     pace = run_pace_min_per_km(context["training_load"])
-    if _safe_number(week_caps.get("max_run_min")):
-        caps.append((float(week_caps["max_run_min"]), "run-load week cap"))
-    if _safe_number(week_caps.get("max_run_km")):
-        caps.append((float(week_caps["max_run_km"]) * pace, "run-km week cap"))
+    if _safe_number(volume_caps.get("max_run_min")):
+        basis = (
+            "established run-history cap"
+            if volume_caps.get("historical_minutes_used")
+            else "run-load week cap"
+        )
+        caps.append((float(volume_caps["max_run_min"]), basis))
+    if _safe_number(volume_caps.get("max_run_km")):
+        basis = (
+            "established run-history km cap"
+            if volume_caps.get("historical_km_used")
+            else "run-km week cap"
+        )
+        caps.append((float(volume_caps["max_run_km"]) * pace, basis))
     rfb = context["return_from_break"]
     if context["returning"] and _safe_number(rfb.get("run_km_cap")):
         caps.append((float(rfb["run_km_cap"]) * pace, "re-entry run-km cap"))
-    if not caps:
-        recent = _recent_minutes(context["training_load"].get("run_load") or {}, "avg_weekly_run_min_4w")
-        if recent and not context["budget_exempt"]:
-            caps.append((recent * (1 + MAX_WEEKLY_RUN_GROWTH_PCT / 100), "recent run minutes +10%"))
     if not caps:
         return None, ""
     return min(caps, key=lambda item: item[0])
@@ -1888,6 +1913,61 @@ def _apply_run_caps(specs: list[dict[str, Any]], context: dict[str, Any]) -> Non
     context["notes"].append(message + ".")
 
 
+def _add_established_easy_volume(specs: list[dict[str, Any]], context: dict[str, Any]) -> None:
+    """Ease existing runs toward established volume without targeting the +10% ceiling."""
+    if not context.get("historical_run_allowed"):
+        return
+    run_load = (context["training_load"].get("run_load") or {})
+    baseline = _safe_number((run_load.get("established_baseline") or {}).get("run_minutes_median"))
+    cap, _ = _run_minute_cap(context)
+    if baseline is None or cap is None:
+        return
+    target = min(baseline, cap)
+    long_cap = _safe_number(context["week_caps"].get("max_long_run_min"))
+    easy_runs = [spec for spec in specs if spec["kind"] == "easy_run"]
+    if not easy_runs:
+        return
+    before = _run_minutes(specs)
+    candidates = [
+        spec for spec in easy_runs
+        if long_cap is None or spec["duration"] + 5 <= long_cap
+    ]
+    if before + 5 > target or not candidates:
+        return
+    if not context["budget_exempt"]:
+        long_progression = next(
+            (
+                item for item in context["progressions"]
+                if item["element"] == "long run duration" and item["impact"]
+            ),
+            None,
+        )
+        long_run = next((spec for spec in specs if spec["kind"] == "long_run"), None)
+        reference = context.get("long_run_reference")
+        if long_progression and long_run and reference is not None:
+            long_run["duration"] = _round_to_5(reference)
+            long_run["min_duration"] = min(long_run["min_duration"], long_run["duration"])
+            context["progressions"].remove(long_progression)
+            context["held"].append("long run duration (established easy volume prioritized)")
+    if not _budget_take(context, "easy running volume", True):
+        return
+    before = _run_minutes(specs)
+    while _run_minutes(specs) + 5 <= target:
+        candidates = [
+            spec for spec in easy_runs
+            if long_cap is None or spec["duration"] + 5 <= long_cap
+        ]
+        if not candidates:
+            break
+        min(candidates, key=lambda spec: spec["duration"])["duration"] += 5
+    added = _run_minutes(specs) - before
+    if added:
+        context["notes"].append(
+            f"Added {added}' of easy running toward the established {baseline:.0f}' weekly baseline; "
+            "the higher historical ceiling remains unused."
+        )
+
+
 def _planned_training_minutes(specs: list[dict[str, Any]]) -> int:
     """Same total the audit compares: no races, no rest/mobility."""
     return sum(spec["duration"] for spec in specs if spec["kind"] not in {"race", "recovery"})
@@ -1896,13 +1976,24 @@ def _planned_training_minutes(specs: list[dict[str, Any]]) -> int:
 def _apply_growth_guard(
     specs: list[dict[str, Any]], context: dict[str, Any], snapshot: dict[str, Any]
 ) -> None:
-    """Weekly total grows <= ~15% over the recent loaded average (same limit as
-    the validator and the audit). Easy volume is shortened first; if the key and
-    long sessions alone exceed it, the plan says so instead of hiding it."""
+    """Apply the shared total-time limit, including only history-supported run growth.
+
+    Easy volume is shortened first; if key and long sessions alone exceed the
+    limit, the plan says so instead of hiding it.
+    """
     baseline = baseline_week_minutes(snapshot)
     if not baseline or context["budget_exempt"] or context["taper"] or context["recovery_week"]:
         return
-    limit = baseline * (1 + MAX_WEEKLY_TOTAL_GROWTH_PCT / 100)
+    def growth_limit() -> float | None:
+        return weekly_total_growth_limit(
+            snapshot,
+            allow_historical=context.get("historical_run_allowed", False),
+            planned_run_minutes=_run_minutes(specs),
+        )
+
+    limit = growth_limit()
+    if limit is None:
+        return
     before = _planned_training_minutes(specs)
     if before <= limit:
         return
@@ -1911,17 +2002,28 @@ def _apply_growth_guard(
         (spec for spec in specs if spec["kind"] in floors and not spec.get("fixed_duration")),
         key=lambda item: -item["duration"],
     ):
-        excess = _planned_training_minutes(specs) - limit
-        if excess <= 0:
-            break
-        cut = min(excess, spec["duration"] - floors[spec["kind"]])
-        if cut > 0:
-            spec["duration"] = max(floors[spec["kind"]], _round_to_5(spec["duration"] - cut))
-            spec["min_duration"] = min(spec["min_duration"], spec["duration"])
+        while True:
+            limit = growth_limit() or limit
+            excess = _planned_training_minutes(specs) - limit
+            if excess <= 0:
+                break
+            floor = floors[spec["kind"]]
+            cut = min(excess, spec["duration"] - floor)
+            if cut <= 0:
+                break
+            old_duration = spec["duration"]
+            new_duration = max(floor, _round_to_5(old_duration - cut))
+            if new_duration >= old_duration:
+                new_duration = max(floor, old_duration - 5)
+            if new_duration == old_duration:
+                break
+            spec["duration"] = new_duration
+            spec["min_duration"] = min(spec["min_duration"], new_duration)
+    limit = growth_limit() or limit
     after = _planned_training_minutes(specs)
     message = (
-        f"Weekly growth limit: recent loaded weeks average {baseline:.0f}', so ~{limit:.0f}' is the "
-        f"+{MAX_WEEKLY_TOTAL_GROWTH_PCT:g}% ceiling; easy volume trimmed from {before}' to {after}'."
+        f"Weekly growth limit: recent loaded weeks average {baseline:.0f}', with an applicable "
+        f"total-time ceiling of ~{limit:.0f}'; easy volume trimmed from {before}' to {after}'."
     )
     if after > limit:
         message += " The key and long sessions alone still exceed it: check life load and sleep before adding more."

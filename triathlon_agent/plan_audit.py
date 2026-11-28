@@ -49,9 +49,12 @@ from .coaching_limits import (
     TAPER_VOLUME_TOLERANCE_LOW,
     VOLUME_PROGRESSION_PCT,
     baseline_week_minutes,
+    effective_run_week_caps,
+    historical_run_volume_allowed,
     is_long_session,
     post_race_easy_days,
     safe_float,
+    weekly_total_growth_limit,
 )
 from .progression import (
     HR_ZONE_RE,
@@ -263,11 +266,18 @@ def audit_plan(
         macro.get("week_classification") in {"recovery", "unload"}
         or macro.get("friel_cycle_type") == "recovery"
         or transition
+        or (snapshot.get("planning_constraints") or {}).get("requested_week_type")
+        == "recovery"
     )
     taper = (
         macro.get("macro_phase") == "taper" or macro.get("friel_cycle_type") == "taper"
     )
-    load_week = not recovery_week and not taper and not holiday
+    load_week = (
+        not recovery_week
+        and not taper
+        and not holiday
+        and macro.get("week_classification") != "absorb"
+    )
     returning = (
         ((snapshot.get("training_load") or {}).get("return_from_break") or {}).get("status")
         == "returning"
@@ -458,13 +468,20 @@ def audit_plan(
             )
         )
 
+    historical_run_allowed = historical_run_volume_allowed(
+        snapshot, readiness=readiness, load_week=load_week
+    )
     planned_minutes = sum(
         float(session.get("duration_min") or 0)
         for session in sessions
         if session.get("discipline") != "Recovery" and not _is_race(session)
     )
-    findings.extend(_overload_findings(snapshot, sessions, planned_minutes, load_week))
-    findings.extend(_run_load_findings(snapshot, sessions, load_week))
+    findings.extend(
+        _overload_findings(
+            snapshot, sessions, planned_minutes, load_week, historical_run_allowed
+        )
+    )
+    findings.extend(_run_load_findings(snapshot, sessions, load_week, historical_run_allowed))
     findings.extend(_spacing_findings(snapshot, sessions, quality))
     findings.extend(_race_findings(snapshot, macro, sessions, planned_minutes, taper))
     findings.extend(_reentry_findings(snapshot, sessions, planned_minutes, quality))
@@ -510,16 +527,23 @@ def _overload_findings(
     sessions: list[dict[str, Any]],
     planned_minutes: float,
     load_week: bool,
+    allow_historical_run: bool = False,
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     baseline = _baseline_week_minutes(snapshot)
-    if baseline and planned_minutes > baseline * (1 + MAX_WEEKLY_TOTAL_GROWTH_PCT / 100):
+    growth_limit = weekly_total_growth_limit(
+        snapshot,
+        allow_historical=allow_historical_run,
+        planned_run_minutes=_planned_run_minutes(sessions),
+    )
+    if baseline and growth_limit and planned_minutes > growth_limit:
         growth = round(100 * (planned_minutes / baseline - 1), 1)
         findings.append(
             _finding(
                 "weekly_volume_jump",
                 f"Planned {planned_minutes:g}' is {growth}% above the recent weekly average of {baseline:.0f}'; "
-                f"grow by at most ~{MAX_WEEKLY_TOTAL_GROWTH_PCT:g}% a week.",
+                f"the applicable total-time ceiling is ~{growth_limit:.0f}' "
+                f"(+{MAX_WEEKLY_TOTAL_GROWTH_PCT:g}% plus established running history when eligible).",
             )
         )
     ramp = ((snapshot.get("training_load") or {}).get("ramp")) or {}
@@ -650,7 +674,10 @@ def _elevation(sessions: list[dict[str, Any]], key: str) -> float:
 
 
 def _run_load_findings(
-    snapshot: dict[str, Any], sessions: list[dict[str, Any]], load_week: bool
+    snapshot: dict[str, Any],
+    sessions: list[dict[str, Any]],
+    load_week: bool,
+    allow_historical_run: bool = False,
 ) -> list[dict[str, str]]:
     """Running-specific load: minutes/km vs recent (~10%/week) and the week caps,
     descent vs `week_caps.max_descent_m`, weekly D+ growth <= ~15%."""
@@ -658,14 +685,15 @@ def _run_load_findings(
     run_load = (snapshot.get("training_load") or {}).get("run_load") or {}
     if not run_load:
         return findings
-    caps = run_load.get("week_caps") or {}
+    caps = {
+        **(run_load.get("week_caps") or {}),
+        **effective_run_week_caps(snapshot, allow_historical=allow_historical_run),
+    }
     run_min = _planned_run_minutes(sessions)
     recent_min = safe_float(run_load.get("avg_weekly_run_min_4w"))
-    limit = recent_min * (1 + MAX_WEEKLY_RUN_GROWTH_PCT / 100) if recent_min else None
-    cap_min = safe_float(caps.get("max_run_min"))
-    if cap_min:
-        limit = cap_min if limit is None else min(limit, cap_min)
-    if limit and run_min > limit + DURATION_TOLERANCE_MIN:
+    limit = safe_float(caps.get("max_run_min"))
+    minute_tolerance = 0 if caps.get("historical_minutes_used") else DURATION_TOLERANCE_MIN
+    if limit and run_min > limit + minute_tolerance:
         findings.append(
             _finding(
                 "run_volume_jump",
@@ -676,7 +704,8 @@ def _run_load_findings(
     cap_km = safe_float(caps.get("max_run_km"))
     if cap_km:
         run_km = _planned_run_km(snapshot, sessions)
-        if run_km > cap_km * 1.05:
+        km_tolerance = 1.0 if caps.get("historical_km_used") else 1.05
+        if run_km > cap_km * km_tolerance:
             findings.append(
                 _finding(
                     "run_km_over_cap",

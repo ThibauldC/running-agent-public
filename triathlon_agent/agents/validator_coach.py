@@ -8,10 +8,18 @@ from ..coaching_limits import (
     MAX_WEEKLY_TOTAL_GROWTH_PCT,
     OVER_REFERENCE_WARN_PCT,
     baseline_week_minutes,
+    effective_run_week_caps,
+    historical_run_volume_allowed,
     is_health_reason,
     safe_float,
+    weekly_total_growth_limit,
 )
-from .head_coach_planner import LIGHT_STRENGTH_MAX_MIN, hard_cap_minutes, reduced_dose_week
+from .head_coach_planner import (
+    LIGHT_STRENGTH_MAX_MIN,
+    hard_cap_minutes,
+    reduced_dose_week,
+    run_pace_min_per_km,
+)
 
 
 DAY_NAMES = (
@@ -422,17 +430,61 @@ def run(
             f"Planned total {total_minutes} min is {over_pct}% above the athlete's {weekly_reference}-min reference; "
             "life load (work, sleep, family) is part of the training load, so check it is realistic."
         )
+    history_allowed = historical_run_volume_allowed(
+        snapshot,
+        readiness=str(performance.get("readiness_status", "green")),
+        load_week=not (
+            _is_recovery_week(snapshot, macro)
+            or _is_taper(macro)
+            or macro.get("week_classification") == "absorb"
+        ),
+    )
+    run_minutes = sum(
+        float(session.get("duration_min") or 0)
+        for session in sessions
+        if session.get("discipline") == "Run" and not session.get("race_day")
+    )
+    growth_limit = weekly_total_growth_limit(
+        snapshot,
+        allow_historical=history_allowed,
+        planned_run_minutes=run_minutes,
+    )
     baseline = baseline_week_minutes(snapshot)
     trained = sum(
         int(session.get("duration_min", 0) or 0)
         for session in sessions
         if session.get("discipline") != "Recovery" and not session.get("race_day")
     )
-    if baseline and trained > baseline * (1 + MAX_WEEKLY_TOTAL_GROWTH_PCT / 100):
+    if baseline and growth_limit and trained > growth_limit:
         verdict = _bump_verdict(verdict, "revise lightly")
         weaknesses.append(
-            f"Planned {trained} min is {round(100 * (trained / baseline - 1), 1)}% above the recent loaded "
-            f"weekly average of {baseline:.0f} min; grow by at most ~{MAX_WEEKLY_TOTAL_GROWTH_PCT:g}% a week."
+            f"Planned {trained} min is above the recent loaded weekly average of {baseline:.0f} min; "
+            f"grow by at most ~{MAX_WEEKLY_TOTAL_GROWTH_PCT:g}% of the total-time baseline "
+            f"(ceiling ~{growth_limit:.0f} min, with established run history when eligible)."
+        )
+
+    run_caps = effective_run_week_caps(snapshot, allow_historical=history_allowed)
+    pace = run_pace_min_per_km(snapshot.get("training_load") or {})
+    run_km = sum(
+        safe_float(session.get("distance_km"))
+        if safe_float(session.get("distance_km")) is not None
+        else float(session.get("duration_min") or 0) / pace
+        for session in sessions
+        if session.get("discipline") == "Run" and not session.get("race_day")
+    )
+    cap_min = run_caps.get("max_run_min")
+    minute_tolerance = 0 if run_caps.get("historical_minutes_used") else 5
+    if cap_min and run_minutes > cap_min + minute_tolerance:
+        verdict = _bump_verdict(verdict, "revise lightly")
+        weaknesses.append(
+            f"Planned running {run_minutes:g} min is above the shared run-volume ceiling of ~{cap_min:.0f} min."
+        )
+    cap_km = run_caps.get("max_run_km")
+    km_tolerance = 1.0 if run_caps.get("historical_km_used") else 1.05
+    if cap_km and run_km > cap_km * km_tolerance:
+        verdict = _bump_verdict(verdict, "revise lightly")
+        weaknesses.append(
+            f"Planned running is ~{run_km:.1f} km against the shared run-volume ceiling of {cap_km:g} km."
         )
 
     quality_sessions = [
